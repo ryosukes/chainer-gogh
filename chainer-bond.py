@@ -1,10 +1,10 @@
-
 import argparse
 import os
 import sys
 
 import numpy as np
 from PIL import Image
+import six
 
 import chainer
 from chainer import cuda
@@ -96,6 +96,27 @@ class Clip(chainer.Function):
             ''','clip')(x)
         return ret
 
+def match_color_histogram(x, y):
+    z = np.zeros_like(x)
+    shape = x[0].shape
+    for i in six.moves.range(len(x)):
+        a = x[i].reshape((3, -1))
+        a_mean = np.mean(a, axis=1, keepdims=True)
+        a_var = np.cov(a)
+        d, v = np.linalg.eig(a_var)
+        a_sigma_inv = v.dot(np.diag(d ** (-0.5))).dot(v.T)
+
+        b = y[i].reshape((3, -1))
+        b_mean = np.mean(b, axis=1, keepdims=True)
+        b_var = np.cov(b)
+        d, v = np.linalg.eig(b_var)
+        b_sigma = v.dot(np.diag(d ** 0.5)).dot(v.T)
+
+        transform = b_sigma.dot(a_sigma_inv)
+        z[i,:] = (transform.dot(a - a_mean) + b_mean).reshape(shape)
+    return z
+
+
 def generate_image(img_orig, img_style, width, nw, nh, max_iter, lr, img_gen=None):
     mid_orig = nn.forward(Variable(img_orig, volatile=True))
     style_mats = [get_matrix(y) for y in nn.forward(Variable(img_style, volatile=True))]
@@ -164,6 +185,8 @@ parser.add_argument('--lam', default=0.005, type=float,
                     help='original image weight / style weight ratio')
 parser.add_argument('--width', '-w', default=435, type=int,
                     help='image width, height')
+parser.add_argument('--base_color', '-c', default='style',
+                    help='image base color')
 args = parser.parse_args()
 
 try:
@@ -195,5 +218,7 @@ if args.gpu>=0:
 W = args.width
 img_content,nw,nh = image_resize(args.orig_img, W)
 img_style,_,_ = image_resize(args.style_img, W)
+if  'contents' in args.base_color:
+    img_style = match_color_histogram(img_style, img_content)
 
 generate_image(img_content, img_style, W, nw, nh, img_gen=None, max_iter=args.iter, lr=args.lr)
