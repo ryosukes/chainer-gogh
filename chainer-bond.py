@@ -96,24 +96,24 @@ class Clip(chainer.Function):
             ''','clip')(x)
         return ret
 
-def match_color_histogram(x, y):
-    z = np.zeros_like(x)
-    shape = x[0].shape
-    for i in six.moves.range(len(x)):
-        a = x[i].reshape((3, -1))
-        a_mean = np.mean(a, axis=1, keepdims=True)
-        a_var = np.cov(a)
-        d, v = np.linalg.eig(a_var)
-        a_sigma_inv = v.dot(np.diag(d ** (-0.5))).dot(v.T)
+def match_color_histogram(img_style, img_content):
+    z = np.zeros_like(img_style)
+    shape = img_style[0].shape
+    for i in six.moves.range(len(img_style)):
+        reshaped_img_style = img_style[i].reshape((3, -1))
+        reshaped_img_style_mean = np.mean(reshaped_img_style, axis=1, keepdims=True)
+        reshaped_img_style_var = np.cov(reshaped_img_style)
+        d, v = np.linalg.eig(reshaped_img_style_var)
+        img_style_sigma_inv = v.dot(np.diag(d ** (-0.5))).dot(v.T)
 
-        b = y[i].reshape((3, -1))
-        b_mean = np.mean(b, axis=1, keepdims=True)
-        b_var = np.cov(b)
-        d, v = np.linalg.eig(b_var)
-        b_sigma = v.dot(np.diag(d ** 0.5)).dot(v.T)
+        reshaped_img_content = img_content[i].reshape((3, -1))
+        reshaped_img_content_mean = np.mean(reshaped_img_content, axis=1, keepdims=True)
+        reshaped_img_content_var = np.cov(reshaped_img_content)
+        d, v = np.linalg.eig(reshaped_img_content_var)
+        img_content_sigma = v.dot(np.diag(d ** 0.5)).dot(v.T)
 
-        transform = b_sigma.dot(a_sigma_inv)
-        z[i,:] = (transform.dot(a - a_mean) + b_mean).reshape(shape)
+        transform = img_content_sigma.dot(img_style_sigma_inv)
+        z[i,:] = (transform.dot(reshaped_img_style - reshaped_img_style_mean) + reshaped_img_content_mean).reshape(shape)
     return z
 
 
